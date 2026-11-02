@@ -1,0 +1,58 @@
+name: Fork Preview Build
+
+# Fork 专用：不依赖上游仓库 secrets（GOOGLE_SERVICES_JSON / SIGNING_KEY 等）。
+# 直接构建 preview 变体，该变体使用 debug 签名，产物可直接安装。
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**"
+      - "!**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build preview APK
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+
+      - name: Set up gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build app
+        run: ./gradlew assemblePreview
+
+      - name: Rename apk
+        id: current_commit
+        run: |
+          set -e
+          commit_count=$(git rev-list --count HEAD)
+          echo "COMMIT_COUNT=$commit_count"
+          echo "COMMIT_COUNT=$commit_count" >> "$GITHUB_OUTPUT"
+          mv app/build/outputs/apk/preview/app-universal-preview.apk "Komikku-fork-r$commit_count.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Komikku-fork-r${{ steps.current_commit.outputs.COMMIT_COUNT }}.apk
+          path: ./*.apk
